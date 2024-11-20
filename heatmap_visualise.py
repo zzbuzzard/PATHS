@@ -55,7 +55,7 @@ def heatmap_camelyon17(config: Config, model: RecursiveModel, image_encoder, tra
 
     if out_path is not None:
         directory = os.path.join(*os.path.split(out_path)[:-1])
-        if not os.path.isdir(directory):
+        if directory != "" and not os.path.isdir(directory):
             print("Creating directory:", directory)
             os.makedirs(directory, exist_ok=True)
 
