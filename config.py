@@ -79,7 +79,7 @@ class Config:
     hipt_val_proportion: float = 0   # Split part of the HIPT training set off into a val set
 
     @staticmethod
-    def load(root_path: str):
+    def load(root_path: str, test_mode: bool = False):
         """
         Loads a Config object from [root_path]/config.json.
         """
@@ -109,7 +109,8 @@ class Config:
 
         config = Config(**data)
 
-        loader.set_preprocess_dir(config.preprocess_dir)
+        if not test_mode:
+            loader.set_preprocess_dir(config.preprocess_dir)
 
         return config
 

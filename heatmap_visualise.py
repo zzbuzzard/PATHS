@@ -217,7 +217,7 @@ if __name__ == "__main__":
 
     model_name = os.path.split(args.model_dir)[-1]
 
-    config = Config.load(args.model_dir)
+    config = Config.load(args.model_dir, test_mode=True)  # test_mode stops error when checking existence of data dirs
     torch.manual_seed(config.seed)
     np.random.seed(config.seed)
     model = config.get_model()
