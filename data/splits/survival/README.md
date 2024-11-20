@@ -1,0 +1,1 @@
+Splits taken from https://github.com/mahmoodlab/HIPT/tree/master/2-Weakly-Supervised-Survival/results_2022_surv/5foldcv/HIPT_LGP%5Bvit4k_xs_dino%5D_freeze_%5BNone%5D_nll_surv_a0.0_5foldcv_gc32_dino_sig

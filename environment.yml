@@ -1,0 +1,29 @@
+name: paths
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - pytorch=2.1.0
+  - scikit-learn
+  - scikit-survival
+  - seaborn
+  - tqdm
+  - torchvision=0.16.0
+  - python=3.10
+  - pip
+  - pip:
+      - h5py
+      - einops
+      - lifelines
+      - matplotlib
+      - numpy
+      - opencv-python
+      - openslide-python
+      - pandas
+      - Pillow
+      - skimage
+      - tiatoolbox==1.5.1
+      - timm==1.0.11
+      - torcheval==0.0.7
+      - wandb
