@@ -81,20 +81,3 @@ for i in range(args.folds):
             else:
                 print("Oke, skipping")
         print()
-
-x = input("Press X to update wandb confs: ").upper()
-if x == "X":
-    import wandb
-    api = wandb.Api()
-    for i in range(args.folds):
-        p = join(paths[i], "wandb_id")
-        if os.path.isfile(p):
-            with open(p, "r") as file:
-                wid = file.read().strip()
-            try:
-                run = api.run(f"zakbuzzard/hierarchical-cv/{wid}")
-                print("Updating", i)
-                run.config["root_name"] = args.name
-                run.update()
-            except wandb.errors.CommError:
-                print("Couldn't find run named in",i,"!")

@@ -120,6 +120,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--model-dir", required=True, help="Path to model directory. Must contain "
                                                                  "config.json file.")
+    parser.add_argument("--wandb-project-name", type=str, default="PATHS")
     args = parser.parse_args()
 
     config = cfg.Config.load(args.model_dir)
@@ -133,8 +134,7 @@ if __name__ == "__main__":
     run_id = utils.wandb_get_id(args.model_dir)
 
     wandb.init(
-        project=
-        "hierarchical-cv-2",
+        project=args.wandb_project_name,
         name=f"{name}",
         config=asdict(config),
         resume="allow",
