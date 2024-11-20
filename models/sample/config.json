@@ -1,0 +1,46 @@
+{
+
+  "wsi_dir": "/PATH/TO/WSI/ROOT",
+  "preprocess_dir": "/PATH/TO/PREPROCESSED/PATCHES/ROOT",
+  "csv_path": "/PATH/TO/CSV/[TODO].csv.zip",
+
+  "seed": 0,
+  "batch_size": 32,
+  "save_epochs": 10,
+  "eval_epochs": 1,
+  "lr": 2e-5,
+  "lr_decay_per_epoch": 0.99,
+
+  "base_power": 0.625,
+  "magnification_factor": 2,
+  "num_levels": 5,
+  "num_epochs": 40,
+  "min_epochs": 0,
+  "top_k_patches": 20,
+  "early_stopping": false,
+
+  "hipt_splits": true,
+  "hipt_val_proportion": 0.0,
+
+  "model_type": "PATHS",
+  "model_config": {
+    "hierarchical_ctx": true,
+    "slide_ctx_mode": "residual",
+
+    "patch_embed_dim": 1024,
+    "dropout": 0.05,
+
+    "importance_mode": "mul",
+
+    "trans_dim": 128,
+    "trans_heads": 4,
+    "trans_layers": 2,
+    "pos_encoding_mode": "2d",
+
+    "importance_mlp_hidden_dim": 128,
+    "hierarchical_ctx_mlp_hidden_dim": 256,
+    "lstm": true
+  },
+
+  "root_name": "sample"
+}

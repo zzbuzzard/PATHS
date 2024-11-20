@@ -1,9 +1,5 @@
 out/
 .idea/
-models/
-test.py
-archive/
-vec/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
