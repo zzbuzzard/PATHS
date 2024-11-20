@@ -42,7 +42,7 @@ Replace `/PATH/TO/SLIDE` and `CONFIG_DIRECTORY` with appropriate values.
 If the slide is a CAMELYON17 slide, set `/PATH/TO/XML` to the path to the annotation XML.
 If not, remove the `--annotation-path` argument.
 ```
-python heatmap_visualise.py -m models/CONFIG_DIRECTORY --slide-path /PATH/TO/SLIDE --annotation-path /PATH/TO/XML -- out heatmap.pdf
+python heatmap_visualise.py -m models/CONFIG_DIRECTORY --slide-path /PATH/TO/SLIDE --annotation-path /PATH/TO/XML --out heatmap.pdf
 ```
 Note that we provide a single pre-trained model in the directory `brca_paths_0` - even without the datasets downloaded,
 it should be possible to run visualisation on any WSI of your choice. However, note that this model was trained on

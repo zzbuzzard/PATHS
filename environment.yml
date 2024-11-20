@@ -4,9 +4,14 @@ channels:
   - nvidia
   - conda-forge
 dependencies:
+  - matplotlib
+  - numpy
+  - openslide
+  - openslide-python
   - pytorch=2.1.0
   - scikit-learn
   - scikit-survival
+  - scikit-image
   - seaborn
   - tqdm
   - torchvision=0.16.0
@@ -16,13 +21,9 @@ dependencies:
       - h5py
       - einops
       - lifelines
-      - matplotlib
-      - numpy
       - opencv-python
-      - openslide-python
       - pandas
       - Pillow
-      - skimage
       - tiatoolbox==1.5.1
       - timm==1.0.11
       - torcheval==0.0.7

@@ -54,7 +54,7 @@ def heatmap_camelyon17(config: Config, model: RecursiveModel, image_encoder, tra
     assert os.path.isfile(slide_path), f"Couldn't find WSI at path '{slide_path}'."
 
     if out_path is not None:
-        directory = os.path.join(os.path.split(out_path)[:-1])
+        directory = os.path.join(*os.path.split(out_path)[:-1])
         if not os.path.isdir(directory):
             print("Creating directory:", directory)
             os.makedirs(directory, exist_ok=True)
