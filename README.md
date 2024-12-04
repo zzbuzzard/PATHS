@@ -3,6 +3,8 @@
 ![](assets/paths_overall.png)
 
 
+###  Note: this is a pre-release version of the code. Camera-ready version coming soon.
+
 ## Usage
 ### Installation
 First, create a virtual env
