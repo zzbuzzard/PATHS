@@ -1,11 +1,19 @@
 # PATHS: A Hierarchical Transformer for Efficient Whole Slide Image Analysis
+**Zak Buzzard, Konstantin Hemker, Nikola Simidjievski, Mateja Jamnik**
+
+<br>
 
 ![](assets/paths_overall.png)
 
+### Abstract
+Computational analysis of whole slide images (WSIs) has seen significant research progress in recent years, with applications ranging across important diagnostic and prognostic tasks such as survival or cancer subtype prediction. Many state-of-the-art models process the entire slide - which may be as large as 150,000×150,000 pixels - as a bag of many patches, the size of which necessitates computationally cheap feature aggregation methods. However, a large proportion of these patches are uninformative, such as those containing only healthy or adipose tissue, adding significant noise and size to the bag. We propose Pathology Transformer with Hierarchical Selection (PATHS), a novel top-down method for hierarchical weakly supervised representation learning on slide-level tasks in computational pathology. PATHS is inspired by the cross-magnification manner in which a human pathologist examines a slide, recursively filtering patches at each magnification level to a small subset relevant to the diagnosis. Our method overcomes the complications of processing the entire slide, enabling quadratic self-attention and providing a simple interpretable measure of region importance. We apply PATHS to five datasets of The Cancer Genome Atlas (TCGA), and achieve superior performance on slide-level prediction tasks when compared to previous methods, despite processing only a small proportion of the slide. 
 
-###  Note: this is a pre-release version of the code. Camera-ready version coming soon.
+### Paper: [PATHS: A Hierarchical Transformer for Efficient Whole Slide Image Analysis](https://arxiv.org/abs/2411.18225)
+
+
 
 ## Usage
+#### Note: this is a pre-release version of the code. Camera-ready version coming soon.
 ### Installation
 First, create a virtual env
 ```
@@ -49,3 +57,14 @@ python heatmap_visualise.py -m models/CONFIG_DIRECTORY --slide-path /PATH/TO/SLI
 Note that we provide a single pre-trained model in the directory `brca_paths_0` - even without the datasets downloaded,
 it should be possible to run visualisation on any WSI of your choice. However, note that this model was trained on
 TCGA-BRCA, and application to other tissue types may produce inaccurate results.
+
+## Citation
+```
+@article{buzzard2024paths,
+      title={PATHS: A Hierarchical Transformer for Efficient Whole Slide Image Analysis}, 
+      author={Zak Buzzard and Konstantin Hemker and Nikola Simidjievski and Mateja Jamnik},
+      year={2024},
+      url={https://arxiv.org/abs/2411.18225}, 
+}
+```
+
