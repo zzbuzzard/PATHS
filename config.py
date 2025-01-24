@@ -6,6 +6,7 @@ from typing import List
 
 from data_utils.dataset import load_splits
 from model.paths import PATHSProcessor
+from model.baselines import ABMIL
 from model.interface import RecursiveModel
 from preprocess import loader
 
@@ -35,6 +36,12 @@ class PATHSProcessorConfig(ModelConfig):
     importance_mlp_hidden_dim: int = 128
     hierarchical_ctx_mlp_hidden_dim: int = 256
     lstm: bool = True
+
+
+@dataclass
+class ABMILConfig(ModelConfig):
+    patch_embed_dim: int = 1024
+    patch_size: int = 256
 
 
 # Training stats etc (model independent)
@@ -106,6 +113,8 @@ class Config:
             c = data["model_config"]
             if c.lstm:
                 assert c.hierarchical_ctx, "If LSTM mode is enabled, hierarchical context must be enabled."
+        elif data["model_type"] == "abmil":
+            data["model_config"] = ABMILConfig(**data["model_config"])
         else:
             raise NotImplementedError(f"Unknown model type '{data['model_type']}'")
 
@@ -122,6 +131,8 @@ class Config:
     def get_model(self) -> RecursiveModel:
         if self.model_type == "PATHS":
             return RecursiveModel(PATHSProcessor, self.model_config, train_config=self)
+        elif self.model_type == "abmil":
+            return ABMIL(self.model_config, self)
         else:
             raise NotImplementedError(f"Unknown model '{self.model_type}'.")
 

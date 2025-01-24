@@ -11,7 +11,6 @@ from torch.cuda.amp import GradScaler, autocast
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 MAX_WORKERS = 8
-print("MAX WORKERS =", MAX_WORKERS)
 
 
 def positional_encoding(length, dim, device=torch.device('cpu'), k=10000.0):
@@ -277,6 +276,29 @@ def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: 
 
     elif task == "subtype_classification":
         subtypes = batch0["subtype"].to(device)
+        loss = F.cross_entropy(logits, subtypes)
+
+        return logits, loss
+
+
+def inference_baseline(model, batch, task: str):
+    from data_utils import patch_batch  # circular imports...
+
+    data = patch_batch.from_batch(batch, device)
+    logits = model(data)
+
+    if task == "survival":
+        labels = batch["survival_bin"].to(device)
+        censors = batch["censored"].to(device)
+
+        hazards = torch.sigmoid(logits)
+
+        loss = nll_loss(hazards, labels, censors)
+
+        return hazards, loss
+
+    elif task == "subtype_classification":
+        subtypes = batch["subtype"].to(device)
         loss = F.cross_entropy(logits, subtypes)
 
         return logits, loss
