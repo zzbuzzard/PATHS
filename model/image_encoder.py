@@ -3,6 +3,7 @@ from torch import nn
 from torchvision.models import resnet
 from torchvision import transforms
 from typing import Tuple, Callable
+from torchvision.transforms import v2
 
 
 def from_name(name: str) -> Tuple[nn.Module, int, Callable]:
@@ -24,6 +25,30 @@ def from_name(name: str) -> Tuple[nn.Module, int, Callable]:
         model.eval()
         return model, 1024, transform
 
+    elif name.startswith("kaiko"):
+        preprocessing = v2.Compose(
+            [
+                v2.ToImage(),
+                v2.Resize(size=224),
+                v2.CenterCrop(size=224),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(
+                    mean=(0.5, 0.5, 0.5),
+                    std=(0.5, 0.5, 0.5),
+                ),
+            ]
+        )
+        model_name = name.split("-")[1]
+        assert model_name in ["vits16", "vits8", "vitb16", "vitb8", "vitl14"], f"Unknown Kaiko-ai ViT: {model_name}"
+        if model_name.startswith("vits"):
+            dim = 384
+        elif model_name.startswith("vitb"):
+            dim = 768
+        else:
+            dim = 1024
+        model = torch.hub.load("kaiko-ai/towards_large_pathology_fms", model_name, trust_repo=True)
+        return model, dim, preprocessing
+
     elif name.startswith("resnet"):
         if name == "resnet50":
             model = resnet.resnet50(resnet.ResNet50_Weights.IMAGENET1K_V1)
@@ -34,3 +59,6 @@ def from_name(name: str) -> Tuple[nn.Module, int, Callable]:
         dim = model.fc.in_features
         model.fc = nn.Identity()  # do not perform classification layer
         return model, dim, nn.Identity()
+
+    else:
+        raise ValueError(f"Invalid patch encoder '{name}'.")
