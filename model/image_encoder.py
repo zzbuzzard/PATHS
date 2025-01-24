@@ -4,26 +4,48 @@ from torchvision.models import resnet
 from torchvision import transforms
 from typing import Tuple, Callable
 from torchvision.transforms import v2
+import timm
+from timm.layers import SwiGLUPacked
+from timm.data import resolve_data_config
+from timm.data.transforms_factory import create_transform
+
+
+class VirchowWrapper(torch.nn.Module):
+    def __init__(self, virchow2_model: torch.nn.Module):
+        super().__init__()
+        self.model = virchow2_model
+
+    def forward(self, *args, **kwargs):
+        output = self.model(*args, **kwargs)  # size: B x 261 x 1280
+
+        class_token = output[:, 0]  # size: B x 1280
+        patch_tokens = output[:, 5:]  # size: B x 256 x 1280, tokens 1-4 are register tokens so we ignore those
+
+        # concatenate class token and average pool of patch tokens
+        embedding = torch.cat([class_token, patch_tokens.mean(1)], dim=-1)  # size: B x 2560
+
+        return embedding
 
 
 def from_name(name: str) -> Tuple[nn.Module, int, Callable]:
     """
-    :param name: Model name (UNI, resnet50, resnet18)
-    :return: (image encoder, encoding dimension, transform)
+    :param name: Model name (uni, virchow2, resnet50, resnet18, kaiko-*)
+    :return: (image encoder, encoding dimension, preprocessing transform)
     """
-    if name == "UNI":
-        import timm
+    name = name.lower()
+    if name == "uni":
         # pretrained=True needed to load UNI weights (and download weights for the first time)
         # init_values need to be passed in to successfully load LayerScale parameters (e.g. - block.0.ls1.gamma)
         model = timm.create_model("hf-hub:MahmoodLab/uni", pretrained=True, init_values=1e-5, dynamic_img_size=True)
+        transform = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
+        return model.eval(), 1024, transform
 
-        # Default transform includes resize and centrecrop, but patch size is controlled elsewhere
-        #  and all inputs are square, so just keep the normalize
-        # transform = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
-        transform = transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
-
-        model.eval()
-        return model, 1024, transform
+    elif name == "virchow2":
+        model = timm.create_model("hf-hub:paige-ai/Virchow2", pretrained=True, mlp_layer=SwiGLUPacked, act_layer=torch.nn.SiLU)
+        model = model.eval()
+        preprocessing = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
+        wrapped_model = VirchowWrapper(model).eval()
+        return wrapped_model, 2560, preprocessing
 
     elif name.startswith("kaiko"):
         preprocessing = v2.Compose(
@@ -46,7 +68,7 @@ def from_name(name: str) -> Tuple[nn.Module, int, Callable]:
             dim = 768
         else:
             dim = 1024
-        model = torch.hub.load("kaiko-ai/towards_large_pathology_fms", model_name, trust_repo=True)
+        model = torch.hub.load("kaiko-ai/towards_large_pathology_fms", model_name, trust_repo=True).eval()
         return model, dim, preprocessing
 
     elif name.startswith("resnet"):
