@@ -6,6 +6,7 @@ import wandb
 from tqdm import tqdm
 import os
 from dataclasses import asdict
+from torch.cuda.amp import GradScaler, autocast
 
 import utils
 import config as cfg
@@ -53,6 +54,8 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
 
     best_val_score = -1
 
+    scaler = GradScaler()
+
     for e in range(start_epoch, config.num_epochs + 1):
         print("Epoch", e, "/", config.num_epochs)
 
@@ -60,10 +63,16 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
             opt.zero_grad()
 
             hazards_or_logits, loss = utils.inference_end2end(config.num_levels, config.top_k_patches, model,
-                                                              config.base_power, batch, config.task)
+                                                              config.base_power, batch, config.task,
+                                                              config.use_mixed_precision)
 
-            loss.backward()
-            opt.step()
+            if config.use_mixed_precision:
+                scaler.scale(loss).backward()
+                scaler.step(opt)
+                scaler.update()
+            else:
+                loss.backward()
+                opt.step()
 
             train_eval.register(batch, hazards_or_logits, loss)
 

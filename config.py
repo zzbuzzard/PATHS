@@ -75,6 +75,8 @@ class Config:
 
     root_name: str = ""  # for tracking multiple folds
 
+    use_mixed_precision: bool = False
+
     hipt_splits: bool = False
     hipt_val_proportion: float = 0   # Split part of the HIPT training set off into a val set
 

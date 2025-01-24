@@ -6,6 +6,7 @@ import wandb
 import math
 from typing import Tuple, Callable, Dict
 import pickle
+from torch.cuda.amp import GradScaler, autocast
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -110,8 +111,9 @@ def apply_to_non_padded(network: Callable, xs: torch.Tensor, inds: torch.BoolTen
     `network`'s output must be of dimension `output_dim`.
     """
     batch_size, max_seq = xs.shape[:2]
-    out = torch.zeros((batch_size, max_seq, output_dim), device=xs.device)
-    out[inds] = network(xs[inds])
+    network_out = network(xs[inds])
+    out = torch.zeros((batch_size, max_seq, output_dim), device=xs.device, dtype=network_out.dtype)
+    out[inds] = network_out
     return out
 
 
@@ -225,7 +227,7 @@ def inference(model, depth, power, batch, importance_penalty, task: str):
 
 
 # todo; should probably just move somewhere else to prevent circular imports
-def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: str):
+def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: str, use_mixed_precision: bool = False):
     from data_utils import patch_batch  # circular imports...
     from data_utils.slide import PreprocessedSlide
     from data_utils.dataset import collate_fn
@@ -237,17 +239,18 @@ def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: 
 
     for i in range(num_levels):
         locs_cpu = batch["locs"]
-        data = patch_batch.from_batch(batch, device)
-        out = model(i, data)
 
-        importance = out["importance"]
+        with autocast(enabled=use_mixed_precision):
+            data = patch_batch.from_batch(batch, device)
+            out = model(i, data)
 
-        new_ctx_slide = out["ctx_slide"]
-        new_ctx_patch = out["ctx_patch"]
+            importance = out["importance"]
+            new_ctx_slide = out["ctx_slide"]
+            new_ctx_patch = out["ctx_patch"]
 
         if i != num_levels - 1:
             new_batch = []
-            imp_cpu = importance.cpu()
+            imp_cpu = importance.cpu().float()
 
             for j in range(len(slides)):
                 slide: PreprocessedSlide = slides[j]
@@ -260,7 +263,7 @@ def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: 
             batch = collate_fn(new_batch)
             power *= 2
 
-    logits = out["logits"]
+    logits = out["logits"].float()
 
     if task == "survival":
         labels = batch0["survival_bin"].to(device)
