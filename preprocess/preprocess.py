@@ -11,16 +11,26 @@ from tqdm import tqdm
 import logging
 from multiprocessing import Pool
 import traceback
+from concurrent.futures import ThreadPoolExecutor
+from torch.cuda.amp import autocast
 
 from model.image_encoder import from_name
 
 LM = 2
 print("LOAD MODE", LM)
 
+model = None
+transform = None
+model_dim = None
+
 
 @torch.no_grad()
 def process(args, model, model_dim, transform, wsi: WSIReader, power: float, tissue_threshold: float = 0.1, load_mode=LM,
             out_device="cpu", progress_bar=False):
+    """
+    Process a slide at the given magnification. First, extract the patches (extremely I/O intensive), then encode them
+    with the model using CUDA.
+    """
     ht, wt = wsi.slide_dimensions(resolution=power, units="power")
     ht, wt = utils.next_multiple(ht, args.patch), utils.next_multiple(wt, args.patch)
 
@@ -42,45 +52,78 @@ def process(args, model, model_dim, transform, wsi: WSIReader, power: float, tis
         elif load_mode == 2:
             return wsi.read_rect((h, w), (args.patch, args.patch), resolution=power, units="power", coord_space="resolution")
 
-    print(power,":",ht,wt)
-
     if load_mode == 1:
-        # up to 22GB ...
+        # up to 22GB ... I don't recommend load mode 1 unless magnification levels are all very low
         massive_image = wsi.read_rect((0, 0), (ht, wt), resolution=power, units="power")
 
     h_patches = ht // args.patch
     w_patches = wt // args.patch
     out = torch.zeros((w_patches, h_patches, model_dim)).to(out_device)
 
+    def extract_patch(h, w):
+        """Extracts a patch if it meets the tissue threshold."""
+        if get_proportion(h, w) > tissue_threshold:
+            im = get_img(h, w)
+            return im, h, w
+        return None
+
+    print("Starting load of approx", (ht*wt)//(args.patch**2), "patches...")
+    all_imgs = []
     hws = []
-    for h in range(0, ht, args.patch):
-        for w in range(0, wt, args.patch):
-            if get_proportion(h, w) > tissue_threshold:
+    tasks = []
+    with ThreadPoolExecutor(max_workers=args.threads_per_process) as executor:
+        for h in range(0, ht, args.patch):
+            for w in range(0, wt, args.patch):
+                tasks.append(executor.submit(extract_patch, h, w))
+
+        # Gather results
+        for task in tasks:
+            result = task.result()
+            if result is not None:
+                im, h, w = result
+                all_imgs.append(im)
                 hws.append((h, w))
 
-    print("Num patches:", len(hws), "/", (w_patches * h_patches))
+    print("Finished load of approx", (ht*wt)//(args.patch**2), f"patches... (loaded {len(hws)})")
+    print("Processing of", len(hws), "patches begins...")
+
     it = range(0, len(hws), args.batch)
     if progress_bar:
         it = tqdm(it)
     for s in it:
         e = min(s + args.batch, len(hws))
-        imgs = [trf.to_tensor(get_img(h, w))[None] for h, w in hws[s: e]]
-        imgs = torch.cat(imgs, dim=0)
-        imgs = imgs.to(utils.device)
-        
-        imgs = transform(imgs)
 
-        # (B x C x H x W) -> (B x D)
-        emb = model(imgs)
+        with autocast():
+            imgs = torch.stack([trf.to_tensor(im) for im in all_imgs[s: e]])
+            imgs = imgs.to(utils.device)
+            imgs = transform(imgs)
+            # (B x C x H x W) -> (B x D)
+            emb = model(imgs)
 
         for i, (h, w) in enumerate(hws[s: e]):
             out[w // args.patch, h // args.patch] = emb[i]
+    print("Processing of", len(hws), "patches completed!")
 
     return out
 
 
 def process_slide(t):
-    slide, model, model_dim, transform, args = t
+    global model, transform, model_dim
+    """Process a slide at all magnifications."""
+    slide, args = t
+
+    if model is None:
+        print("Init model")
+        model, *x = from_name(args.model)
+        if len(x) == 1:
+            import torchvision.transforms as tr
+            model_dim = x[0]
+            transform = tr.Compose([])
+        else:
+            model_dim, transform = x
+        model = model.eval().to(utils.device)
+        model = torch.cuda.amp.autocast(enabled=True)(model)
+
     wsi = WSIReader.open(join(args.dir, slide))
     if wsi.info.objective_power is None:
         print("No objective power; assuming 40")
@@ -115,13 +158,13 @@ if __name__ == '__main__':
     multiprocessing.set_start_method('spawn', force=True)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--model", type=str, choices=["resnet50", "resnet18", "UNI"],
-                        help="Patch processing model", default="resnet50")
+    parser.add_argument("-m", "--model", type=str, help="Patch processing model", default="UNI")
     parser.add_argument("-d", "--dir", type=str, help="Path to input data folder")
     parser.add_argument("-o", "--out", type=str, help="Path to output data folder")
     parser.add_argument("-b", "--batch", type=int, help="Batch size")
     parser.add_argument("-p", "--patch", type=int, help="Patch size", default=256)
     parser.add_argument("-w", "--workers", type=int, help="Number of parallel processes to run", default=32)
+    parser.add_argument("-t", "--threads_per_process", type=int, help="Number of threads to run per process", default=8)
     parser.add_argument("-ms", "--magnifications", type=float, nargs="+", help="Magnification levels",
                         default=[0.625, 1.25, 2.5, 5.0, 10.0])
     parser.add_argument("-ds", "--downscale", type=int, help="Magnification downscale amount for background masking. "
@@ -140,15 +183,6 @@ if __name__ == '__main__':
         print("Creating directory", args.out)
         os.makedirs(args.out)
 
-    model, *x = from_name(args.model)
-    if len(x) == 1:
-        import torchvision.transforms as tr
-        model_dim = x[0]
-        transform = tr.Compose([])
-    else:
-        model_dim, transform = x
-    model = model.eval().to(utils.device)
-
     slide_ids = [i for i in os.listdir(args.dir) if i.endswith(".svs")]
 
     # KIRP slides with only one level; loading at 0.625 etc extremely slow
@@ -159,7 +193,7 @@ if __name__ == '__main__':
     logger = logging.getLogger()
     logger.setLevel(logging.ERROR)
 
-    data = [(s, model, model_dim, transform, args) for s in slide_ids]
+    data = [(s, args) for s in slide_ids]
 
     with Pool(processes=args.workers) as pool:
         for _ in tqdm(pool.imap_unordered(process_slide, data), total=len(slide_ids)):
