@@ -10,15 +10,13 @@ from torch.cuda.amp import GradScaler, autocast
 
 import utils
 import config as cfg
-from utils import device
+from utils import device, EarlyStopping
 from data_utils.dataset import SlideDataset, collate_fn
 from model.interface import RecursiveModel
 from eval import SurvivalEvaluator, SubtypeClassificationEvaluator
 
 
-def get_dataloaders(train, val, test):
-    batch_size = config.batch_size[0]
-
+def get_dataloaders(train, val, test, batch_size):
     num_workers = 0
     prefetch = None
 
@@ -50,11 +48,14 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
     opt = torch.optim.AdamW(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
     lr_scheduler = config.get_lr_scheduler(opt)
 
-    train_loader, val_loader, test_loader = get_dataloaders(train_ds, val_ds, test_ds)
-
-    best_val_score = -1
+    train_loader, val_loader, test_loader = get_dataloaders(train_ds, val_ds, test_ds, config.batch_size[0])
 
     scaler = GradScaler()
+
+    # For early stopping on val loss
+    early_stopping = EarlyStopping(patience=config.early_stopping_patience, mode="min", verbose=True)
+    if config.early_stopping:
+        assert val_loader is not None, f"A validation set must be used when early stopping is enabled."
 
     for e in range(start_epoch, config.num_epochs + 1):
         print("Epoch", e, "/", config.num_epochs)
@@ -82,6 +83,8 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
         wandb.log(train_eval.calculate(train_stats, e) | {"epoch": e})
         train_eval.reset()
 
+        train_stats["epoch"] = e + 1
+
         if e % config.eval_epochs == 0 and val_loader is not None:
             print("Evaluating on validation set...")
             model.eval()
@@ -96,20 +99,15 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
                 wandb.log(log_dict)
                 val_eval.reset()
 
-                val_score = log_dict["val_c-index"] if config.task == "survival" else log_dict["val_AUC"]
-                if config.early_stopping and val_score > best_val_score and e >= config.min_epochs:
-                    print("Saving at epoch", e+1, f"as val score {val_score:.3f} > {best_val_score:.3f}")
-                    best_val_score = val_score
-                    train_stats["epoch"] = e + 1
-                    utils.save_state(model_dir, model, train_stats)
+                # val_score = log_dict["val_c-index"] if config.task == "survival" else log_dict["val_AUC"]
+                val_score = log_dict["val_loss"]
+                if config.early_stopping and early_stopping.step(val_score, model):
+                    print(f"Early stopping at epoch {e+1}")
+                    model = early_stopping.load_best_weights(model)
+                    break
 
             model.train()
 
-    if config.early_stopping:
-        s = utils.load_state(model_dir, model)
-        print(f"Early stopping: loading from epoch {s['epoch']}")
-
-    train_stats["epoch"] = config.num_epochs
     utils.save_state(model_dir, model, train_stats)
 
     # Training has completed, evaluate on test
@@ -122,7 +120,7 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
 
             test_eval.register(batch, hazards_or_logits, loss)
 
-    wandb.log(test_eval.calculate(train_stats) | {"epoch": config.num_epochs})
+    wandb.log(test_eval.calculate(train_stats))
 
 
 if __name__ == "__main__":
@@ -164,8 +162,3 @@ if __name__ == "__main__":
     train_loop(model, train, val, test, config, args.model_dir)
 
     wandb.finish()
-
-
-
-
-

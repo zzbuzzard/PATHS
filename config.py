@@ -71,14 +71,13 @@ class Config:
 
     # Training
     batch_size: int = 32
-    save_epochs: int = 10
     eval_epochs: int = 1
     lr: float = 2e-5
     lr_decay_per_epoch: float = 0.99
     seed: int = 0
-    early_stopping: bool = False
     weight_decay: float = 1e-2
-    min_epochs: int = 0  # min epochs for early stopping
+    early_stopping: bool = False
+    early_stopping_patience: int = 5
 
     root_name: str = ""  # for tracking multiple folds
 
