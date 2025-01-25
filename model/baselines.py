@@ -14,18 +14,13 @@ class ABMIL(nn.Module):
         self.gate2 = torch.nn.Sequential(torch.nn.Linear(self.dim, 1, bias=False), torch.nn.Sigmoid()).eval()
         self.final_project = torch.nn.Linear(self.dim, num_logits, bias=False)
 
-    def new_depth(self, new_depth: int):
-        pass
-
     def forward(self, data: PatchBatch):
         xs = data.fts                               # B x N x D
         a1 = utils.apply_to_non_padded(self.gate1, xs, data.valid_inds, 1)  # B x N x 1
         a2 = utils.apply_to_non_padded(self.gate2, xs, data.valid_inds, 1)  # B x N x 1
         a = a1 * a2  # B x N x 1
 
-        # Each batch item has a different number of features.
-        # Here we set padding locations to a large negative number before softmax,
-        #  ensuring they are assigned an importance of (practically) 0
+        # Ensure post-softmax importance of 0 at padded locations
         a[~data.valid_inds] = -10000
 
         a = torch.softmax(a[..., 0], dim=-1)        # B x N
