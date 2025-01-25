@@ -12,7 +12,6 @@ import logging
 from multiprocessing import Pool
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from torch.cuda.amp import autocast
 
 from model.image_encoder import from_name
 
@@ -56,10 +55,6 @@ def process(args, model, model_dim, transform, wsi: WSIReader, power: float, tis
         # up to 22GB ... I don't recommend load mode 1 unless magnification levels are all very low
         massive_image = wsi.read_rect((0, 0), (ht, wt), resolution=power, units="power")
 
-    h_patches = ht // args.patch
-    w_patches = wt // args.patch
-    out = torch.zeros((w_patches, h_patches, model_dim)).to(out_device)
-
     def extract_patch(h, w):
         """Extracts a patch if it meets the tissue threshold."""
         if get_proportion(h, w) > tissue_threshold:
@@ -67,7 +62,8 @@ def process(args, model, model_dim, transform, wsi: WSIReader, power: float, tis
             return im, h, w
         return None
 
-    print("Starting load of approx", (ht*wt)//(args.patch**2), "patches...")
+    if args.verbose:
+        print("Starting load of approx", (ht*wt)//(args.patch**2), "patches...")
     all_imgs = []
     hws = []
     tasks = []
@@ -84,8 +80,13 @@ def process(args, model, model_dim, transform, wsi: WSIReader, power: float, tis
                 all_imgs.append(im)
                 hws.append((h, w))
 
-    print("Finished load of approx", (ht*wt)//(args.patch**2), f"patches... (loaded {len(hws)})")
-    print("Processing of", len(hws), "patches begins...")
+    if args.verbose:
+        print("Finished load of approx", (ht*wt)//(args.patch**2), f"patches... (loaded {len(hws)})")
+        print("Processing of", len(hws), "patches begins...")
+
+    h_patches = ht // args.patch
+    w_patches = wt // args.patch
+    out = torch.zeros((w_patches, h_patches, model_dim)).to(out_device)
 
     it = range(0, len(hws), args.batch)
     if progress_bar:
@@ -93,7 +94,7 @@ def process(args, model, model_dim, transform, wsi: WSIReader, power: float, tis
     for s in it:
         e = min(s + args.batch, len(hws))
 
-        with autocast():
+        with torch.autocast(device_type="cuda", dtype=torch.float16):
             imgs = torch.stack([trf.to_tensor(im) for im in all_imgs[s: e]])
             imgs = imgs.to(utils.device)
             imgs = transform(imgs)
@@ -102,7 +103,9 @@ def process(args, model, model_dim, transform, wsi: WSIReader, power: float, tis
 
         for i, (h, w) in enumerate(hws[s: e]):
             out[w // args.patch, h // args.patch] = emb[i]
-    print("Processing of", len(hws), "patches completed!")
+
+    if args.verbose:
+        print("Processing of", len(hws), "patches completed!")
 
     return out
 
@@ -114,15 +117,8 @@ def process_slide(t):
 
     if model is None:
         print("Init model")
-        model, *x = from_name(args.model)
-        if len(x) == 1:
-            import torchvision.transforms as tr
-            model_dim = x[0]
-            transform = tr.Compose([])
-        else:
-            model_dim, transform = x
+        model, model_dim, transform = from_name(args.model)
         model = model.eval().to(utils.device)
-        model = torch.cuda.amp.autocast(enabled=True)(model)
 
     wsi = WSIReader.open(join(args.dir, slide))
     if wsi.info.objective_power is None:
@@ -171,6 +167,7 @@ if __name__ == '__main__':
                                                              "E.g. downscale=4, the image is processed at 4x less "
                                                              "magnification before being passed to the background "
                                                              "masker.", default=4)
+    parser.add_argument("--verbose", action="store_true")
 
     # Naming convention:
     #  [slide ID]_m = [H x W x D]
