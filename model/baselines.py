@@ -9,7 +9,7 @@ class ABMIL(nn.Module):
     def __init__(self, config, train_config):
         super().__init__()
         self.dim = config.patch_embed_dim
-        num_logits = train_config.nbins if train_config.task == "survival" else len(train_config.filter_to_subtypes)
+        num_logits = train_config.num_logits()
         self.gate1 = torch.nn.Sequential(torch.nn.Linear(self.dim, 1, bias=False), torch.nn.Tanh()).eval()
         self.gate2 = torch.nn.Sequential(torch.nn.Linear(self.dim, 1, bias=False), torch.nn.Sigmoid()).eval()
         self.final_project = torch.nn.Linear(self.dim, num_logits, bias=False)

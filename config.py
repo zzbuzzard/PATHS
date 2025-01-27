@@ -61,13 +61,18 @@ class Config:
     # Data
     wsi_dir: str
     csv_path: str
+    preprocess_dir: str = None
+
+    # This is a bit of a workaround. The codebase was designed with single datasets in mind,
+    #  but kidney and lung classification require multiple datasets (KIRP/KIRC/KICH and LUSC/LUAD respectively)
+    #  setting multi_dataset=["kirp", "kirc", "kich"] causes all three datasets to be read.
+    multi_dataset: List[str] = None
+
     nbins: int = 4
     loss: str = "nll"
 
     task: str = "survival"  # survival / subtype_classification
     filter_to_subtypes: List[str] = None
-
-    preprocess_dir: str = None
 
     # Training
     batch_size: int = 32
@@ -119,15 +124,17 @@ class Config:
 
         config = Config(**data)
 
-        if not test_mode:
-            loader.set_preprocess_dir(config.preprocess_dir)
+        assert config.task in ["subtype_classification", "survival"], f"Unknown task '{config.task}'."
+
+        if config.multi_dataset is not None:
+            assert config.task == "subtype_classification", "multi_dataset only supported for subtype classification"
 
         return config
 
     def power_levels(self):
         return [self.base_power * self.magnification_factor ** i for i in range(self.num_levels)]
 
-    def get_model(self) -> RecursiveModel:
+    def get_model(self):
         if self.model_type == "PATHS":
             return RecursiveModel(PATHSProcessor, self.model_config, train_config=self)
         elif self.model_type == "abmil":
@@ -141,3 +148,11 @@ class Config:
 
     def get_lr_scheduler(self, optimizer):
         return ExponentialLR(optimizer, self.lr_decay_per_epoch)
+
+    def num_logits(self) -> int:
+        if self.task == "survival":
+            return self.nbins
+        elif self.filter_to_subtypes != None:
+            return len(self.filter_to_subtypes)
+        else:
+            return len(self.multi_dataset)

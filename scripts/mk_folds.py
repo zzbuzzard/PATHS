@@ -10,12 +10,12 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-n", "--name", required=True, type=str)
-parser.add_argument("-f", "--folds", type=int, default=5)
+parser.add_argument("-f", "--folds", type=int, default=-1)  # -1 => deduced from task (5 for surv, 10 for class)
 
 args = parser.parse_args()
 
 root = "../models"
-paths = [join(root, args.name + f"_{i}") for i in range(args.folds)]
+paths = [join(root, args.name + f"_{i}") for i in range(10)]
 start = None
 
 for i in paths:
@@ -25,7 +25,7 @@ for i in paths:
         break
 
 if start is None:
-    print("No starting config found!")
+    print("No starting config found for", args.name)
     quit(1)
 
 confpath = join(start, "config.json")
@@ -35,6 +35,13 @@ if not os.path.isfile(confpath):
 
 with open(confpath, "r") as file:
     config = json.loads(file.read())
+
+if args.folds == -1:
+    if "task" in config and config["task"] == "subtype_classification":
+        args.folds = 10
+    else:
+        args.folds = 5
+print("Using", args.folds, "folds")
 
 if not "root_name" in config:
     print("Adding root_name to config")

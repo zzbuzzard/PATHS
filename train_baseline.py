@@ -20,7 +20,7 @@ from train import get_dataloaders
 def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDataset, test_ds: SlideDataset, config: cfg.Config, model_dir: str):
     def mk_eval(split: str):
         if config.task == "subtype_classification":
-            return SubtypeClassificationEvaluator(split, len(config.filter_to_subtypes))
+            return SubtypeClassificationEvaluator(split, config.num_logits())
         else:
             return SurvivalEvaluator(split)
 

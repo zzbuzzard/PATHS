@@ -9,12 +9,43 @@ from os.path import join
 import torch
 from tqdm import tqdm
 from typing import List, Tuple
-import gc
-import logging
 import csv
 
 import utils
 from .slide import load_patch_preprocessed_slide
+from preprocess.loader import get_all_slide_ids
+
+
+def multi_dataset_frame(config) -> pd.DataFrame:
+    """Create a DataFrame for multi-dataset classification, containing slide IDs + the dataset they came from."""
+    s = config.preprocess_dir
+    assert config.multi_dataset[0] in s
+
+    # here for clarity but doesn't particularly matter; we are just assigning a unique ID to each dataset
+    def get_oncotree_code(ds: str) -> str:
+        ds = ds.lower()
+        if ds == "kirp":
+            return "PRCC"
+        elif ds == "kirc":
+            return "CCRCC"
+        elif ds == "kich":
+            return "CHRCC"
+        return ds.upper()  # e.g. LUAD, LUSC
+
+    get_preprocess_dir = lambda s: config.preprocess_dir.replace(config.multi_dataset[0], s)
+
+    frame = pd.DataFrame(columns=["slide_id", "oncotree_code", "root_dir"])
+
+    for ds in config.multi_dataset:
+        pdir = get_preprocess_dir(ds)
+        slide_ids = get_all_slide_ids(pdir, config.base_power)
+        code = [get_oncotree_code(ds)] * len(slide_ids)
+        root_dir = [pdir] * len(slide_ids)
+
+        temp_frame = pd.DataFrame({"slide_id": slide_ids, "oncotree_code": code, "root_dir": root_dir})
+        frame = pd.concat([frame, temp_frame], ignore_index=True)
+
+    return frame
 
 
 # Returns a tuple: the train/val/test datasets. val may be None.
@@ -22,16 +53,24 @@ def load_splits(props, seed, ctx_dim, config, test_only=False, combined=False):
     train_prop, val_prop, test_prop = props
     assert abs(train_prop + val_prop + test_prop - 1) < 1e-4
 
-    # Load CSV here and split the dataset
-    frame = pd.read_csv(config.csv_path, compression="zip")
+    if config.multi_dataset is not None:
+        frame = multi_dataset_frame(config)
+    else:
+        # Load CSV here and split the dataset
+        frame = pd.read_csv(config.csv_path, compression="zip")
+        frame["root_dir"] = config.preprocess_dir  # required to support multi-dataset mode
+
+        # remove .svs extension
+        print(frame["slide_id"])
+        frame["slide_id"] = [".".join(s.split(".")[:-1]) for s in frame["slide_id"]]
+        print(frame["slide_id"])
 
     # Prune invalid rows with no corresponding slide
     invalid_labels = []
     for i in range(len(frame)):
         slide_id = frame.iloc[i].slide_id
-
-        x = ".".join(slide_id.split(".")[:-1])
-        path = os.path.join(config.preprocess_dir, x + f"_{config.base_power:.3f}.pt")
+        root_dir = frame.iloc[i].root_dir
+        path = os.path.join(root_dir, slide_id + f"_{config.base_power:.3f}.pt")
 
         if not os.path.isfile(path):
             invalid_labels.append(i)
@@ -39,32 +78,25 @@ def load_splits(props, seed, ctx_dim, config, test_only=False, combined=False):
     print(f"Ignoring {len(invalid_labels)} rows without files.")
     frame.drop(invalid_labels, inplace=True)
 
-    # Extract one random slide per patient.
-    #  Obviously this is not ideal, as some patients have multiple slides,
-    #  but our method does not support this for the moment.
-    # Note: this operation is deterministic
-    frame = frame.drop_duplicates(subset='case_id')
+    if config.task == "survival":
+        # Extract one slide per patient for survival prediction, as this is a patient-level task not a slide-level task
+        # Note: this operation is deterministic
+        frame = frame.drop_duplicates(subset='case_id')
 
     frame.reset_index(drop=True, inplace=True)
 
     # Filter to necessary columns
-    frame = frame[["case_id", "slide_id", "survival_months", "censorship", "oncotree_code"]]
-
-    _, bins = pd.qcut(frame.survival_months, config.nbins, labels=False, retbins=True)
+    if config.task == "survival":
+        frame = frame[["case_id", "slide_id", "survival_months", "censorship", "oncotree_code", "root_dir"]]
+        _, bins = pd.qcut(frame.survival_months, config.nbins, labels=False, retbins=True)
+    else:
+        frame = frame[["slide_id", "oncotree_code", "root_dir"]]
+        bins = None
 
     if combined:
         return SlideDataset(frame, bins, ctx_dim, config)
 
     if config.filter_to_subtypes is not None:
-        subtypes = frame['oncotree_code'].tolist()
-        print("Subtype counts:")
-        t = 0
-        for i in config.filter_to_subtypes:
-            c = subtypes.count(i)
-            print(f" {i}:\t\t{c}")
-            t += c
-        print(f" Other:\t\t{len(frame) - t}")
-
         frame = frame[frame['oncotree_code'].isin(config.filter_to_subtypes)]
 
     if config.hipt_splits:
@@ -73,7 +105,10 @@ def load_splits(props, seed, ctx_dim, config, test_only=False, combined=False):
         if config.task == "survival":
             path = f"data/splits/survival/tcga_{ds}"
         elif config.task == "subtype_classification":
-            path = f"data/splits/subtype_classification/tcga_{ds}"
+            name = ds
+            if ds == "kirp": name = "kidney"
+            if ds == "luad": name = "lung"
+            path = f"data/splits/subtype_classification/tcga_{name}"
         else:
             raise Exception(f"Unexpected task '{config.task}' - expected subtype_classification or survival.")
 
@@ -87,9 +122,9 @@ def load_splits(props, seed, ctx_dim, config, test_only=False, combined=False):
                 r = csv.reader(f)
                 next(r)  # remove column titles
                 data = [i[1:] for i in r]
-            train_p = [i+".svs" for i, j, k in data]
-            val_p = [j+".svs" for i, j, k in data if len(j) > 0]
-            test_p = [k+".svs" for i, j, k in data if len(k) > 0]
+            train_p = [i for i, j, k in data]
+            val_p = [j for i, j, k in data if len(j) > 0]
+            test_p = [k for i, j, k in data if len(k) > 0]
             match_on = 'slide_id'
         else:
             with open(path, "r") as f:
@@ -149,10 +184,8 @@ class SlideDataset(dutils.Dataset):
         self.magnification_factor = config.magnification_factor
         self.num_levels = config.num_levels
 
-        self.q_survival_months = pd.cut(frame.survival_months, bins, labels=False, include_lowest=True)
-        self.survival_months = frame.survival_months
-        self.censorship = torch.tensor(frame.censorship.to_numpy(np.int64), dtype=torch.long)
         self.slide_ids = frame.slide_id
+        self.root_dirs = frame.root_dir.tolist()
 
         ds_len = len(self.slide_ids)
 
@@ -160,8 +193,25 @@ class SlideDataset(dutils.Dataset):
 
         if config.task == "subtype_classification":
             classes = frame.oncotree_code.tolist()
-            self.subtype = [config.filter_to_subtypes.index(i) for i in classes]
+            subtypes = sorted(set(classes))
+
+            # len(subtypes) may occasionally be != config.num_logits() for e.g. small val sets
+            print("Distinct subtypes:", len(subtypes))
+            print("Subtype counts:")
+            for i in subtypes:
+                c = classes.count(i)
+                print(f" {i}:\t\t{c}")
+
+            self.subtype = [subtypes.index(i) for i in classes]
+
+            self.q_survival_months = None
+            self.survival_months = None
+            self.censorship = None
         else:
+            self.q_survival_months = pd.cut(frame.survival_months, bins, labels=False, include_lowest=True)
+            self.survival_months = frame.survival_months
+            self.censorship = torch.tensor(frame.censorship.to_numpy(np.int64), dtype=torch.long)
+
             self.subtype = None
 
         # Single-threaded version
@@ -184,23 +234,32 @@ class SlideDataset(dutils.Dataset):
         if self.subtype is not None:
             kwargs["subtype"] = self.subtype[idx]
 
-        return load_patch_preprocessed_slide(join(self.wsi_dir, self.slide_ids[idx]), self.base_power, self.patch_size,
+        preprocessed_root = self.root_dirs[idx]
+        slide_id = self.slide_ids[idx]
+        if slide_id.endswith(".svs"):
+            slide_id = slide_id[:-4]
+
+        return load_patch_preprocessed_slide(slide_id, preprocessed_root, self.base_power, self.patch_size,
                                              self.ctx_dim, self.num_levels, **kwargs)
 
     def __len__(self):
-        return len(self.survival_months)
+        return len(self.slide_ids)
 
     def __getitem__(self, item):
         s = self.slides[item]
 
-        classification_data = {
-            "survival_bin": self.q_survival_months[item],
-            "survival": self.survival_months[item],
-            "censored": self.censorship[item],
-            "slide": s
-        }
+        # survival mode
+        if self.q_survival_months is not None:
+            label_data = {
+                "survival_bin": self.q_survival_months[item],
+                "survival": self.survival_months[item],
+                "censored": self.censorship[item]
+            }
+        # classification mode; subtype is included in s.todict() already
+        else:
+            label_data = {}
 
-        return s.todict() | classification_data
+        return s.todict() | label_data | {"slide": s}
 
 
 def collate_fn(xs):

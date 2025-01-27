@@ -22,7 +22,7 @@ class PATHSProcessor(nn.Module, Processor):
         self.depth = depth
 
         # Output dimensionality
-        num_logits = train_config.nbins if train_config.task == "survival" else len(train_config.filter_to_subtypes)
+        num_logits = train_config.num_logits()
 
         self.config = config
         self.train_config = train_config
