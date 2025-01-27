@@ -86,9 +86,12 @@ class RecursiveModel(nn.Module):
         super().__init__()
         self.procs = nn.ModuleList([processor_constructor(config_, train_config, depth=i, **kwargs) for i in range(train_config.num_levels)])
 
+        # Define LSTM here so it is shared between the processors
         from config import PATHSProcessorConfig
         if isinstance(config_, PATHSProcessorConfig) and config_.lstm:
-            self.lstm = LSTMCell(config_.patch_embed_dim, config_.patch_embed_dim, config_.hierarchical_ctx_mlp_hidden_dim)
+            dim = config_.patch_embed_dim if config_.model_dim is None else config_.model_dim
+
+            self.lstm = LSTMCell(dim, dim, config_.hierarchical_ctx_mlp_hidden_dim)
             self.use_lstm = True
         else:
             self.use_lstm = False

@@ -27,7 +27,13 @@ class PATHSProcessor(nn.Module, Processor):
         self.config = config
         self.train_config = train_config
 
-        self.dim = config.patch_embed_dim
+        if config.model_dim is None:
+            self.proj_in = nn.Identity()
+            self.dim = config.patch_embed_dim
+        else:
+            self.proj_in = nn.Linear(config.patch_embed_dim, config.model_dim, bias=False)
+            self.dim = config.model_dim
+
         self.slide_ctx_dim = config.trans_dim
 
         # Slide context can either be concatenated or summed; in our paper we choose sum (mode="residual")
@@ -69,6 +75,7 @@ class PATHSProcessor(nn.Module, Processor):
         of each slide having different length etc. (padding is required).
         """
         patch_features = data.fts
+        patch_features = self.proj_in(patch_features)
 
         ################# Apply LSTM
         if self.config.lstm:

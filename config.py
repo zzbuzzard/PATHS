@@ -6,9 +6,8 @@ from typing import List
 
 from data_utils.dataset import load_splits
 from model.paths import PATHSProcessor
-from model.baselines import ABMIL
+from model.baselines import ABMIL, TransMIL
 from model.interface import RecursiveModel
-from preprocess import loader
 
 
 @dataclass
@@ -23,6 +22,7 @@ class PATHSProcessorConfig(ModelConfig):
     slide_ctx_mode: str = "residual"  # residual / concat / none
 
     patch_embed_dim: int = 1024
+    model_dim: int = None  # project embeds to model_dim if it is not None
     dropout: float = 0.0
     patch_size: int = 256  # only needed for visualisation etc. and not at train time
 
@@ -44,6 +44,13 @@ class PATHSProcessorConfig(ModelConfig):
 class ABMILConfig(ModelConfig):
     patch_embed_dim: int = 1024
     patch_size: int = 256
+
+
+@dataclass
+class TransMILConfig(ModelConfig):
+    patch_embed_dim: int = 1024
+    patch_size: int = 256
+    transformer_dim: int = 512
 
 
 # Training stats etc (model independent)
@@ -121,6 +128,8 @@ class Config:
                 assert c.hierarchical_ctx, "If LSTM mode is enabled, hierarchical context must be enabled."
         elif data["model_type"] == "abmil":
             data["model_config"] = ABMILConfig(**data["model_config"])
+        elif data["model_type"] == "transmil":
+            data["model_config"] = TransMILConfig(**data["model_config"])
         else:
             raise NotImplementedError(f"Unknown model type '{data['model_type']}'")
 
@@ -141,6 +150,8 @@ class Config:
             return RecursiveModel(PATHSProcessor, self.model_config, train_config=self)
         elif self.model_type == "abmil":
             return ABMIL(self.model_config, self)
+        elif self.model_type == "transmil":
+            return TransMIL(self.model_config, self)
         else:
             raise NotImplementedError(f"Unknown model '{self.model_type}'.")
 
