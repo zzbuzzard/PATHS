@@ -37,7 +37,8 @@ def from_name(name: str) -> Tuple[nn.Module, int, Callable]:
         # pretrained=True needed to load UNI weights (and download weights for the first time)
         # init_values need to be passed in to successfully load LayerScale parameters (e.g. - block.0.ls1.gamma)
         model = timm.create_model("hf-hub:MahmoodLab/uni", pretrained=True, init_values=1e-5, dynamic_img_size=True)
-        transform = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
+        # transform = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
+        transform = transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
         return model.eval(), 1024, transform
 
     elif name == "virchow2":
