@@ -37,6 +37,8 @@ class PATHSProcessorConfig(ModelConfig):
     hierarchical_ctx_mlp_hidden_dim: int = 256
     lstm: bool = True
 
+    random_rec_baseline: bool = False  # random patch selection. just used for ablation
+
 
 @dataclass
 class ABMILConfig(ModelConfig):

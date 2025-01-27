@@ -61,9 +61,7 @@ def load_splits(props, seed, ctx_dim, config, test_only=False, combined=False):
         frame["root_dir"] = config.preprocess_dir  # required to support multi-dataset mode
 
         # remove .svs extension
-        print(frame["slide_id"])
         frame["slide_id"] = [".".join(s.split(".")[:-1]) for s in frame["slide_id"]]
-        print(frame["slide_id"])
 
     # Prune invalid rows with no corresponding slide
     invalid_labels = []

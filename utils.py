@@ -226,7 +226,8 @@ def inference(model, depth, power, batch, importance_penalty, task: str):
 
 
 # todo; should probably just move somewhere else to prevent circular imports
-def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: str, use_mixed_precision: bool = False):
+def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: str, use_mixed_precision: bool = False,
+                      random_rec_baseline: bool = False):
     from data_utils import patch_batch  # circular imports...
     from data_utils.slide import PreprocessedSlide
     from data_utils.dataset import collate_fn
@@ -246,6 +247,9 @@ def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: 
             importance = out["importance"]
             new_ctx_slide = out["ctx_slide"]
             new_ctx_patch = out["ctx_patch"]
+
+        if random_rec_baseline:
+            importance = torch.randn_like(importance)
 
         if i != num_levels - 1:
             new_batch = []
