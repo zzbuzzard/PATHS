@@ -21,6 +21,7 @@ dependencies:
       - h5py
       - einops
       - lifelines
+      - nystrom-attention
       - opencv-python
       - pandas
       - Pillow

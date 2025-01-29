@@ -280,17 +280,21 @@ class PreprocessedSlide:
         """Iterates data from magnification level `index` to `index+1`"""
         locs //= self.patch_size
 
-        if imp_cpu is None:
+        if imp_cpu is None and importance is not None:
             imp_cpu = importance.cpu()
 
         # Remove padding
         ctx_patch = ctx_patch[:npatches]
-        new_ctx_patch = new_ctx_patch[:npatches]
+        if new_ctx_patch is not None:
+            new_ctx_patch = new_ctx_patch[:npatches]
         locs = locs[:npatches]
-        imp_cpu = imp_cpu[:npatches]
+        if imp_cpu is not None:
+            imp_cpu = imp_cpu[:npatches]
 
-        ctx_slide = torch.cat((ctx_slide, new_ctx_slide[None]), dim=0)  # K x D -> (K+1) x D
-        ctx_patch = torch.cat((ctx_patch, new_ctx_patch[:, None]), dim=1)  # N x K x D -> N x (K+1) x D
+        if new_ctx_slide is not None:
+            ctx_slide = torch.cat((ctx_slide, new_ctx_slide[None]), dim=0)  # K x D -> (K+1) x D
+        if new_ctx_patch is not None:
+            ctx_patch = torch.cat((ctx_patch, new_ctx_patch[:, None]), dim=1)  # N x K x D -> N x (K+1) x D
 
         if keep_patches != -1:
             # Filter by importance

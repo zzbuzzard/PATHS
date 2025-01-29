@@ -77,8 +77,7 @@ def load_splits(props, seed, ctx_dim, config, test_only=False, combined=False):
     frame.drop(invalid_labels, inplace=True)
 
     if config.task == "survival":
-        # Extract one slide per patient for survival prediction, as this is a patient-level task not a slide-level task
-        # Note: this operation is deterministic
+        # Select one WSI per patient for survival
         frame = frame.drop_duplicates(subset='case_id')
 
     frame.reset_index(drop=True, inplace=True)
@@ -91,11 +90,11 @@ def load_splits(props, seed, ctx_dim, config, test_only=False, combined=False):
         frame = frame[["slide_id", "oncotree_code", "root_dir"]]
         bins = None
 
-    if combined:
-        return SlideDataset(frame, bins, ctx_dim, config)
-
     if config.filter_to_subtypes is not None:
         frame = frame[frame['oncotree_code'].isin(config.filter_to_subtypes)]
+
+    if combined:
+        return SlideDataset(frame, bins, ctx_dim, config)
 
     if config.hipt_splits:
         ds = os.path.split(config.wsi_dir)[-1].lower()  # e.g. "brca"
@@ -179,8 +178,13 @@ class SlideDataset(dutils.Dataset):
         self.wsi_dir = config.wsi_dir
         self.patch_size = config.model_config.patch_size
         self.base_power = config.base_power
-        self.magnification_factor = config.magnification_factor
         self.num_levels = config.num_levels
+
+        # M=4 is implemented at the data level as M=2 but with double recursion
+        #  so for dataset purposes, we have twice as many levels (where a level has a fixed increase of 2x)
+        if config.magnification_factor == 4:
+            # e.g. 0.625, 3 levels, M=4 : we load patches at [0.625, 1.25, 2.5, 5.0, 10.0] = 5 levels
+            self.num_levels = 2 * self.num_levels - 1
 
         self.slide_ids = frame.slide_id
         self.root_dirs = frame.root_dir.tolist()

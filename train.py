@@ -68,7 +68,8 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
             hazards_or_logits, loss = utils.inference_end2end(config.num_levels, config.top_k_patches, model,
                                                               config.base_power, batch, config.task,
                                                               config.use_mixed_precision,
-                                                              config.model_config.random_rec_baseline)
+                                                              config.model_config.random_rec_baseline,
+                                                              config.magnification_factor)
 
             if config.use_mixed_precision:
                 scaler.scale(loss).backward()
@@ -95,7 +96,8 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
                 for batch in val_loader:
                     hazards_or_logits, loss = utils.inference_end2end(config.num_levels, config.top_k_patches, model,
                                                                       config.base_power, batch, config.task,
-                                                                      random_rec_baseline=config.model_config.random_rec_baseline)
+                                                                      random_rec_baseline=config.model_config.random_rec_baseline,
+                                                                      magnification_factor=config.magnification_factor)
 
                     val_eval.register(batch, hazards_or_logits, loss)
 
@@ -121,7 +123,8 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
         for batch in test_loader:
             hazards_or_logits, loss = utils.inference_end2end(config.num_levels, config.top_k_patches, model,
                                                               config.base_power, batch, config.task,
-                                                              random_rec_baseline=config.model_config.random_rec_baseline)
+                                                              random_rec_baseline=config.model_config.random_rec_baseline,
+                                                              magnification_factor=config.magnification_factor)
 
             test_eval.register(batch, hazards_or_logits, loss)
 

@@ -227,7 +227,7 @@ def inference(model, depth, power, batch, importance_penalty, task: str):
 
 # todo; should probably just move somewhere else to prevent circular imports
 def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: str, use_mixed_precision: bool = False,
-                      random_rec_baseline: bool = False):
+                      random_rec_baseline: bool = False, magnification_factor: int = 2):
     from data_utils import patch_batch  # circular imports...
     from data_utils.slide import PreprocessedSlide
     from data_utils.dataset import collate_fn
@@ -258,8 +258,18 @@ def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: 
             for j in range(len(slides)):
                 slide: PreprocessedSlide = slides[j]
 
-                x = slide.iter(i, data.num_ims[j], locs_cpu[j], data.ctx_slide[j], data.ctx_patch[j], importance[j],
+                ind = i if magnification_factor == 2 else 2 * i
+
+                x = slide.iter(ind, data.num_ims[j], locs_cpu[j], data.ctx_slide[j], data.ctx_patch[j], importance[j],
                                new_ctx_slide[j], new_ctx_patch[j], keep_patches[i], imp_cpu[j])
+
+                if magnification_factor == 4:
+                    new_fts = x["fts"]
+                    ctx_patch = x["ctx_patch"]
+                    ctx_slide = x["ctx_slide"]
+                    locs = x["locs"]
+                    num_ims = new_fts.shape[0]
+                    x = slide.iter(ind + 1, num_ims, locs, ctx_slide, ctx_patch, None,None, None, -1)
 
                 new_batch.append(x)
 

@@ -137,6 +137,7 @@ class Config:
         config = Config(**data)
 
         assert config.task in ["subtype_classification", "survival"], f"Unknown task '{config.task}'."
+        assert config.magnification_factor in [2, 4], f"Only M=2 and M=4 supported."
 
         if config.multi_dataset is not None:
             assert config.task == "subtype_classification", "multi_dataset only supported for subtype classification"
