@@ -51,8 +51,6 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
         print("Epoch", e, "/", config.num_epochs)
 
         for idx, batch in enumerate(tqdm(train_loader)):
-            opt.zero_grad()
-
             with autocast(enabled=config.use_mixed_precision):
                 hazards_or_logits, loss = utils.inference_baseline(model, batch, config.task)
 
@@ -66,11 +64,13 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
                 if call_optimize:
                     scaler.step(opt)
                     scaler.update()
+                    opt.zero_grad()
             else:
                 loss.backward()
 
                 if call_optimize:
                     opt.step()
+                    opt.zero_grad()
 
             train_eval.register(batch, hazards_or_logits, loss)
 
