@@ -217,19 +217,19 @@ class SlideDataset(dutils.Dataset):
             self.subtype = None
 
         # Single-threaded version
-        # self.slides = []
-        # for i in tqdm(range(ds_len), desc="Pre-patching dataset..."):
-        #     self.slides.append(self.load_top_level(i))
+        self.slides = []
+        for i in tqdm(range(ds_len), desc="Pre-patching dataset..."):
+            self.slides.append(self.load_top_level(i))
 
         # Multi-threaded version
-        torch.multiprocessing.set_sharing_strategy('file_system')
-        num_workers = min(cpu_count(), utils.MAX_WORKERS)
-        print("Using", num_workers, "workers")
-        with Pool(num_workers) as pool:
-            inps = list(range(ds_len))
-            data = list(tqdm(pool.imap(self.load_top_level, inps), total=ds_len, desc="Pre-patching dataset"))
-        self.slides = data
-        torch.multiprocessing.set_sharing_strategy('file_descriptor')
+        # torch.multiprocessing.set_sharing_strategy('file_system')
+        # num_workers = min(cpu_count(), utils.MAX_WORKERS)
+        # print("Using", num_workers, "workers")
+        # with Pool(num_workers) as pool:
+        #     inps = list(range(ds_len))
+        #     data = list(tqdm(pool.imap(self.load_top_level, inps), total=ds_len, desc="Pre-patching dataset"))
+        # self.slides = data
+        # torch.multiprocessing.set_sharing_strategy('file_descriptor')
 
     def load_top_level(self, idx):
         kwargs = {}
