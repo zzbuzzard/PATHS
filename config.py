@@ -85,6 +85,7 @@ class Config:
 
     # Training
     batch_size: int = 32
+    gradient_accumulation_steps: int = 1  # measured in batches
     eval_epochs: int = 1
     lr: float = 2e-5
     lr_decay_per_epoch: float = 0.99

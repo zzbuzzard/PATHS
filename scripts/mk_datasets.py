@@ -33,8 +33,6 @@ if found is None:
     print(args.name, "does not exist for any of the datasets:", names)
     quit(1)
 
-todo = [i for i in names if i.lower() != start_name]
-
 confpath = join(found, "config.json")
 if not os.path.isfile(confpath):
     print("Config not found at", confpath)
@@ -47,8 +45,12 @@ with open(confpath, "r") as file:
 
 if "task" in config and config["task"] == "subtype_classification":
     print("Classification mode: limiting to BRCA/KIRP/LUAD")
-    names_c = ["BRCA", "KIRP", "LUAD"]
-    todo = [i for i in todo if i in names_c]
+    names = ["BRCA", "KIRP", "LUAD"]
+if "panther_splits" in config and config["panther_splits"]:
+    names = ["BRCA", "UCEC", "COADREAD", "LUAD", "KIRC"]
+
+todo = [i for i in names if i.lower() != start_name]
+
 
 wsi_dir = lambda s: config["wsi_dir"].replace(start_name, s.lower())
 csv_path = lambda s: config["csv_path"].replace(start_name, s.lower())
@@ -109,10 +111,6 @@ for ds in todo:
                 print("Keys clash:", current_diff)
                 print(" Current keys:", [c[i] for i in current_diff])
                 print(" Goal keys:", [goal_conf[i] for i in current_diff])
-            choice = input("Overwrite? (y/n) ").upper()
-            if choice == "Y":
-                with open(cpath, "w") as file:
-                    file.write(json.dumps(goal_conf, indent=4))
-            else:
-                print("Oke, skipping")
-        print()
+            print("Overwriting...")
+            with open(cpath, "w") as file:
+                file.write(json.dumps(goal_conf, indent=4))

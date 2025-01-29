@@ -57,6 +57,8 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
     if config.early_stopping:
         assert val_loader is not None, f"A validation set must be used when early stopping is enabled."
 
+    assert config.gradient_accumulation_steps == 1
+
     for e in range(start_epoch, config.num_epochs + 1):
         print("Epoch", e, "/", config.num_epochs)
 

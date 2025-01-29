@@ -50,19 +50,27 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
     for e in range(start_epoch, config.num_epochs + 1):
         print("Epoch", e, "/", config.num_epochs)
 
-        for batch in tqdm(train_loader):
+        for idx, batch in enumerate(tqdm(train_loader)):
             opt.zero_grad()
 
             with autocast(enabled=config.use_mixed_precision):
                 hazards_or_logits, loss = utils.inference_baseline(model, batch, config.task)
 
+            # Handle gradient accumulation
+            loss = loss / config.gradient_accumulation_steps
+            call_optimize = ((idx + 1) % config.gradient_accumulation_steps == 0) or (idx == len(train_loader) - 1)
+
             if config.use_mixed_precision:
                 scaler.scale(loss).backward()
-                scaler.step(opt)
-                scaler.update()
+
+                if call_optimize:
+                    scaler.step(opt)
+                    scaler.update()
             else:
                 loss.backward()
-                opt.step()
+
+                if call_optimize:
+                    opt.step()
 
             train_eval.register(batch, hazards_or_logits, loss)
 
