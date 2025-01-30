@@ -6,7 +6,7 @@ from typing import List
 
 from data_utils.dataset import load_splits
 from model.paths import PATHSProcessor
-from model.baselines import ABMIL, TransMIL
+from model.baselines import ABMIL, TransMIL, ILRA
 from model.interface import RecursiveModel
 
 
@@ -51,6 +51,18 @@ class TransMILConfig(ModelConfig):
     patch_embed_dim: int = 1024
     patch_size: int = 256
     transformer_dim: int = 512
+
+
+@dataclass
+class ILRAConfig(ModelConfig):
+    patch_embed_dim: int = 1024
+    patch_size: int = 256
+
+    num_layers: int = 2
+    hidden_feat: int = 256
+    num_heads: int = 8
+    topk: int = 64  # default in original codebase is 2, but paper suggests 64
+    ln: bool = False
 
 
 # Training stats etc (model independent)
@@ -131,6 +143,8 @@ class Config:
             data["model_config"] = ABMILConfig(**data["model_config"])
         elif data["model_type"] == "transmil":
             data["model_config"] = TransMILConfig(**data["model_config"])
+        elif data["model_type"].lower() == "ilra":
+            data["model_config"] = ILRAConfig(**data["model_config"])
         else:
             raise NotImplementedError(f"Unknown model type '{data['model_type']}'")
 
@@ -154,6 +168,8 @@ class Config:
             return ABMIL(self.model_config, self)
         elif self.model_type == "transmil":
             return TransMIL(self.model_config, self)
+        elif self.model_type.lower() == "ilra":
+            return ILRA(self.model_config, self)
         else:
             raise NotImplementedError(f"Unknown model '{self.model_type}'.")
 
