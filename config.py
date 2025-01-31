@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from os import path
 import json
@@ -6,7 +7,7 @@ from typing import List
 
 from data_utils.dataset import load_splits
 from model.paths import PATHSProcessor
-from model.baselines import ABMIL, TransMIL, ILRA
+from model.baselines import ABMIL, TransMIL, ILRA, ZoomMIL
 from model.interface import RecursiveModel
 
 
@@ -63,6 +64,20 @@ class ILRAConfig(ModelConfig):
     num_heads: int = 8
     topk: int = 64  # default in original codebase is 2, but paper suggests 64
     ln: bool = False
+
+
+@dataclass
+class ZoomMILConfig(ModelConfig):
+    power_levels: List[float]   # Magnification levels e.g. [2.5, 5, 10]. Note: has to be of length three.
+
+    patch_embed_dim: int = 1024
+    patch_size: int = 256
+
+    hidden_feat_dim: int = 256  # Hidden layer feature dimension.
+    out_feat_dim: int = 512     # Output feature dimension.
+    k_sample: int = 12          # Number of samples (k) to zoom-in at next higher magnification.
+    k_sigma: float = 0.002      # Perturbation sigma.
+    dropout: float = None
 
 
 # Training stats etc (model independent)
@@ -145,6 +160,8 @@ class Config:
             data["model_config"] = TransMILConfig(**data["model_config"])
         elif data["model_type"].lower() == "ilra":
             data["model_config"] = ILRAConfig(**data["model_config"])
+        elif data["model_type"].lower() == "zoommil":
+            data["model_config"] = ZoomMILConfig(**data["model_config"])
         else:
             raise NotImplementedError(f"Unknown model type '{data['model_type']}'")
 
@@ -170,6 +187,8 @@ class Config:
             return TransMIL(self.model_config, self)
         elif self.model_type.lower() == "ilra":
             return ILRA(self.model_config, self)
+        elif self.model_type.lower() == "zoommil":
+            return ZoomMIL(self.model_config, self)
         else:
             raise NotImplementedError(f"Unknown model '{self.model_type}'.")
 

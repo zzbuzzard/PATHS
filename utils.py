@@ -4,9 +4,11 @@ import os
 from os.path import join
 import wandb
 import math
-from typing import Tuple, Callable, Dict
 import pickle
+from typing import Tuple, Callable, Dict, List
 from torch.cuda.amp import GradScaler, autocast
+
+from preprocess import loader
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -295,10 +297,19 @@ def inference_end2end(num_levels, keep_patches, model, base_power, batch, task: 
         return logits, loss
 
 
-def inference_baseline(model, batch, task: str):
+def inference_baseline(model, batch, task: str, model_type: str):
     from data_utils import patch_batch  # circular imports...
 
+    model_type = model_type.lower()
+
     data = patch_batch.from_batch(batch, device)
+
+    if model_type == "zoommil":
+        assert data.batch_size == 1, "ZoomMIL only supports a batch size of 1"
+        slide = batch["slide"][0]
+        data = convert_to_zoommil_fts(slide, model.power_levels)
+        data = [i[None].to(device) for i in data]  # add unit batch dimension + move to cuda
+
     logits = model(data)
 
     if task == "survival":
@@ -446,3 +457,47 @@ class EarlyStopping:
             print(f"Loading best model weights with validation metric value: {self.best_metric:.4f}")
         model.load_state_dict(self.best_model_weights)
         return model
+
+
+def convert_to_zoommil_fts(slide, power_levels: List[float]) -> List[torch.Tensor]:
+    """
+    Util to convert from our PreprocessedSlide to the specific 1D format zoommil expects.
+    Output shape: [N x D, (M^2 N) x D, (M^4 N) x D]
+      (in the case power_levels = [x, mx, m^2 x]. Also works for e.g. [x, m x, m^3 x])
+    """
+    data = []
+    for power in power_levels:
+        fts = loader.load(slide.preprocessed_root, slide.slide_id, power)  # H x W x D
+        data.append(fts)
+
+    # Background filter
+    d0 = data[0]
+    mask = torch.sum(d0.abs(), dim=-1) > 0  # [H x W] bool
+    xs, ys = mask.nonzero(as_tuple=True)
+
+    output = []
+
+    # Get all patches at each level, such that
+    for i, (tensor, power) in enumerate(zip(data, power_levels)):
+        scale = round(power / power_levels[0])
+        h, w, _ = tensor.shape
+
+        # Scale up coordinates. E.g. x -> [2x, 2x+1] on the second iter
+        scaled_xs = (xs * scale).view(-1, 1) + torch.arange(scale).view(1, -1)
+        scaled_ys = (ys * scale).view(-1, 1) + torch.arange(scale).view(1, -1)
+
+        #  (x, y) -> [(2x, 2y), (2x, 2y+1), (2x+1, 2y), (2x+1, 2y+1)]
+        scaled_coords = torch.stack([torch.cartesian_prod(sx, sy) for sx, sy in zip(scaled_xs, scaled_ys)], dim=0)
+        patch_coords = scaled_coords.view(-1, 2)
+
+        # Clamp coordinates to be within bounds
+        #  (coords are *almost always* within bounds. there's just the occasional off-by-one error
+        #   at the edges due to slide dimensions not being perfect powers of two.)
+        out_of_bounds = (patch_coords[:, 0] >= tensor.shape[0]) | (patch_coords[:, 1] >= tensor.shape[1])
+        patch_coords[out_of_bounds] *= 0  # just query (0, 0), we will zero them anyway after
+        gathered_patches = tensor[patch_coords[:, 0], patch_coords[:, 1]]
+        gathered_patches[out_of_bounds] *= 0
+
+        output.append(gathered_patches)
+
+    return output

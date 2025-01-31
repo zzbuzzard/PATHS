@@ -52,7 +52,7 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
 
         for idx, batch in enumerate(tqdm(train_loader)):
             with autocast(enabled=config.use_mixed_precision):
-                hazards_or_logits, loss = utils.inference_baseline(model, batch, config.task)
+                hazards_or_logits, loss = utils.inference_baseline(model, batch, config.task, config.model_type)
 
             # Handle gradient accumulation
             loss = loss / config.gradient_accumulation_steps
@@ -87,7 +87,7 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
             model.eval()
             with torch.no_grad():
                 for batch in val_loader:
-                    hazards_or_logits, loss = utils.inference_baseline(model, batch, config.task)
+                    hazards_or_logits, loss = utils.inference_baseline(model, batch, config.task, config.model_type)
 
                     val_eval.register(batch, hazards_or_logits, loss)
 
@@ -110,7 +110,7 @@ def train_loop(model: RecursiveModel, train_ds: SlideDataset, val_ds: SlideDatas
     test_eval = mk_eval("test")
     with torch.no_grad():
         for batch in test_loader:
-            hazards_or_logits, loss = utils.inference_baseline(model, batch, config.task)
+            hazards_or_logits, loss = utils.inference_baseline(model, batch, config.task, config.model_type)
 
             test_eval.register(batch, hazards_or_logits, loss)
 

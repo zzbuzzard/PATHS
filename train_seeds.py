@@ -4,6 +4,7 @@ import argparse
 import wandb
 import os
 from dataclasses import asdict
+import gc
 
 import utils
 import config as cfg
@@ -14,25 +15,31 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--model-dir", required=True, help="Path to model directory (seed 0). Must contain "
                                                                  "config.json file.")
-    parser.add_argument("--wandb-project-name", type=str, default="hierarchical-cv-2")
+    parser.add_argument("-s", "--start-seed", type=int, default=0)
+    parser.add_argument("--wandb-project-name", type=str, default="PATHS")
     args = parser.parse_args()
 
     root = args.model_dir
     config = cfg.Config.load(root + "_0")
 
-    if config.task == "survival":
-        num_seeds = 5
-    else:
-        num_seeds = 10
+    # if config.task == "survival":
+    #     num_seeds = 5
+    # else:
+    #     num_seeds = 10
+
+    num_seeds = 5
 
     if config.model_type.upper() == "PATHS":
         from train import train_loop
     else:
         from train_baseline import train_loop
 
-    print("Running for", num_seeds, "seeds")
+    print("Running seeds", args.start_seed, "to", num_seeds-1, "(inclusive)")
 
-    for seed in range(num_seeds):
+    for seed in range(args.start_seed, num_seeds):
+        torch.cuda.empty_cache()
+        gc.collect()
+
         args.model_dir = root + "_" + str(seed)
         print("RUNNNING SEED", seed, ":", args.model_dir)
 
